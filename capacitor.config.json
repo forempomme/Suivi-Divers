@@ -1,0 +1,11 @@
+{
+  "appId": "com.suividivers.app",
+  "appName": "Suivi Divers",
+  "webDir": "dist",
+  "server": { "androidScheme": "https" },
+  "android": { "backgroundColor": "#F2EDE4" },
+  "plugins": {
+    "LocalNotifications": { "smallIcon": "ic_stat_notify", "iconColor": "#C8A84B" },
+    "SplashScreen": { "launchShowDuration": 600, "backgroundColor": "#F2EDE4", "showSpinner": false }
+  }
+}
