@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import _ from "lodash";
 
 // ─── Constantes ───────────────────────────────────────────────
-const APP_VERSION = "1.2.0"; // Mineure : thème Mithril-Anneau
+const APP_VERSION = "1.3.0"; // Mineure : modal catégorie + color/emoji picker
 const APP_NAME    = "Suivi Divers";
 
 const COLOR_OPTS = [
@@ -17,7 +17,21 @@ const COLOR_OPTS = [
   { dot:"#D85A30", bg:"#FAECE7", color:"#993C1D" },
   { dot:"#D4537E", bg:"#FBEAF0", color:"#993556" },
 ];
-const ICON_OPTS = ["🚗","🐾","🏥","🏠","🔧","🌿","💊","📋","🏋️","🧹","🎓","⚡","🧰","🚿","💻","🛒"];
+const EMOJI_CATS = [
+  { label:"Véhicules",  emojis:["🚗","🚙","🏍️","🚲","🛻","🚑","🚒","✈️","🚂","⛵","🛵","🚐","🛺","🚁"] },
+  { label:"Animaux",    emojis:["🐾","🐶","🐱","🐰","🐹","🦊","🐺","🐻","🐼","🦁","🐯","🐮","🐷","🐔","🐧","🦜","🐠","🐢","🦎","🐝"] },
+  { label:"Santé",      emojis:["💊","🏥","🩺","🩻","💉","🩹","🧬","🦷","👁️","🧪","❤️","🫀","🧠","🩼"] },
+  { label:"Maison",     emojis:["🏠","🏡","🔑","🚿","🛁","💡","🔌","🪟","🚪","🧹","🧺","🪣","🪴","🛋️","🛏️","🪑","🪞","🧯"] },
+  { label:"Outils",     emojis:["🔧","🔨","🪛","⚙️","🔩","🧰","🪚","💻","📱","🖥️","🖨️","⌨️","🖱️","📡"] },
+  { label:"Finance",    emojis:["💰","💳","🏦","💵","📊","📈","🧾","💸","🪙","💹","📉","🏷️"] },
+  { label:"Sport",      emojis:["🏋️","⚽","🎾","🏊","🚴","🤸","🥊","🏃","🎯","⛷️","🤾","🧘","🏄","🤺","🥋","🏇"] },
+  { label:"Nourriture", emojis:["🍕","🛒","🥗","🍎","🥩","🍱","☕","🍳","🥦","🧃","🍷","🥐","🧁","🎂"] },
+  { label:"Admin",      emojis:["📋","📁","📄","🗂️","📝","🖊️","📬","🔐","📌","✅","📅","📆","🗓️","📎"] },
+  { label:"Nature",     emojis:["🌿","🌱","🌸","🌳","☀️","🌙","⭐","🌊","🔥","❄️","🌈","⚡","🌺","🍀","🌻"] },
+  { label:"Loisirs",    emojis:["🎓","🎮","🎵","📚","🎨","🎭","🎬","🧩","🎲","🎸","🎹","🎤","📷","🎁"] },
+  { label:"Divers",     emojis:["⏰","🔔","🎀","🧲","💡","🗑️","📦","🌐","💬","🔖","🏆","🥇","🧸","🪆"] },
+];
+const ICON_OPTS = EMOJI_CATS.flatMap(c=>c.emojis); // rétrocompatibilité
 const BASE_CATS = {
   voiture: { label:"Voiture / Garage", short:"Voiture", ...COLOR_OPTS[0], base:true },
   veto:    { label:"Vétérinaire",       short:"Véto",    ...COLOR_OPTS[1], base:true },
@@ -27,6 +41,7 @@ const BASE_CATS = {
 };
 const MAX_FILE = 4 * 1024 * 1024;
 const MAX_DIM  = 1400;
+const SL_G = {fontSize:11,color:"var(--ts)",marginBottom:5,display:"block",fontWeight:600,letterSpacing:".05em",textTransform:"uppercase"};
 
 // ─── CSS global ───────────────────────────────────────────────
 const CSS = `
@@ -741,69 +756,154 @@ function RapportScreen({entries,allCats}){
   );
 }
 
+// ─── CategoryModal ────────────────────────────────────────────
+function CategoryModal({initial,onSave,onClose}){
+  const[name,setName]           =useState(initial?.name||"");
+  const[color,setColor]         =useState(initial?.dot||COLOR_OPTS[0].dot);
+  const[emoji,setEmoji]         =useState(initial?.emoji||"📋");
+  const[emojiSearch,setEmojiSearch]=useState("");
+  const[nameErr,setNameErr]     =useState(false);
+  const colorRef=useRef();
+
+  const filteredCats=useMemo(()=>{
+    if(!emojiSearch.trim())return EMOJI_CATS;
+    const q=emojiSearch.toLowerCase();
+    const hits=EMOJI_CATS.flatMap(c=>c.emojis.filter(e=>e.includes(q)));
+    return hits.length?[{label:"Résultats",emojis:hits}]:[];
+  },[emojiSearch]);
+
+  const handleSave=()=>{
+    if(!name.trim()){setNameErr(true);return;}
+    const short=name.length>12?name.substring(0,12)+"…":name;
+    onSave({name:name.trim(),short,dot:color,bg:color+"22",color,emoji});
+  };
+
+  const SI2={width:"100%",padding:"10px 12px",fontSize:14,border:"1px solid var(--bs)",borderRadius:10,background:"var(--input)",color:"var(--tp)",outline:"none",fontFamily:"inherit"};
+
+  return(
+    <div className="fi" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.65)",zIndex:1500,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="su" style={{background:"var(--card)",borderRadius:"22px 22px 0 0",maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+
+        {/* En-tête avec preview */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px 14px",borderBottom:"1px solid var(--b)",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:44,height:44,borderRadius:12,background:color+"22",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,transition:"background .2s"}}>{emoji}</div>
+            <div>
+              <div style={{fontSize:16,fontWeight:700,color:"var(--tp)"}}>{initial?"Modifier la catégorie":"Nouvelle catégorie"}</div>
+              <div style={{fontSize:12,color:"var(--ts)",marginTop:1}}>{name||"Aperçu du nom"}</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:"var(--muted)",border:"none",cursor:"pointer",color:"var(--ts)",borderRadius:"50%",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <X size={16}/>
+          </button>
+        </div>
+
+        {/* Corps scrollable */}
+        <div style={{overflowY:"auto",flex:1,padding:"16px 20px 8px"}}>
+
+          {/* Nom */}
+          <label style={SL_G}>Nom</label>
+          <input value={name} onChange={e=>{setName(e.target.value);setNameErr(false);}}
+            placeholder="ex: Sport, Jardinage, Administratif…" maxLength={24}
+            style={{...SI2,borderColor:nameErr?"var(--er)":"var(--bs)",marginBottom:nameErr?4:18}}
+            autoFocus/>
+          {nameErr&&<div style={{fontSize:12,color:"var(--er)",marginBottom:14}}>Le nom est obligatoire.</div>}
+
+          {/* Couleur */}
+          <label style={SL_G}>Couleur</label>
+          <div style={{display:"flex",flexWrap:"wrap",gap:9,marginBottom:10,alignItems:"center"}}>
+            {COLOR_OPTS.map((c,i)=>(
+              <div key={i} onClick={()=>setColor(c.dot)} style={{width:32,height:32,borderRadius:"50%",background:c.dot,cursor:"pointer",border:color===c.dot?"3px solid var(--tp)":"3px solid transparent",transform:color===c.dot?"scale(1.15)":"none",transition:"transform .12s,border .12s",flexShrink:0}}/>
+            ))}
+            {/* Picker couleur libre */}
+            <div onClick={()=>colorRef.current?.click()}
+              style={{width:32,height:32,borderRadius:"50%",cursor:"pointer",border:"2px solid var(--bs)",flexShrink:0,overflow:"hidden",background:"conic-gradient(from 0deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)",position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}
+              title="Couleur personnalisée">
+              <span style={{fontSize:13,pointerEvents:"none"}}>＋</span>
+            </div>
+            <input ref={colorRef} type="color" value={color} onChange={e=>setColor(e.target.value)}
+              style={{opacity:0,width:0,height:0,position:"absolute",pointerEvents:"none"}}/>
+          </div>
+          {/* Indicateur couleur active */}
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:18,padding:"7px 12px",background:"var(--muted)",borderRadius:9,width:"fit-content"}}>
+            <div style={{width:18,height:18,borderRadius:"50%",background:color,flexShrink:0,border:"1px solid var(--b)"}}/>
+            <span style={{fontSize:12,color:"var(--ts)",fontFamily:"monospace"}}>{color.toUpperCase()}</span>
+          </div>
+
+          {/* Emoji */}
+          <label style={SL_G}>Emoji</label>
+          <div style={{display:"flex",alignItems:"center",gap:8,background:"var(--muted)",borderRadius:10,padding:"8px 12px",marginBottom:12,border:"1px solid var(--b)"}}>
+            <Search size={14} color="var(--ts)"/>
+            <input value={emojiSearch} onChange={e=>setEmojiSearch(e.target.value)}
+              placeholder="Rechercher un emoji…"
+              style={{flex:1,border:"none",background:"transparent",fontSize:14,color:"var(--tp)",outline:"none",fontFamily:"inherit"}}/>
+            {emojiSearch&&<button onClick={()=>setEmojiSearch("")} style={{background:"none",border:"none",cursor:"pointer",color:"var(--ts)",display:"flex",padding:0}}><X size={13}/></button>}
+          </div>
+          {filteredCats.length===0&&<div style={{fontSize:13,color:"var(--ts)",marginBottom:16,paddingLeft:2}}>Aucun résultat.</div>}
+          {filteredCats.map(cat=>(
+            <div key={cat.label} style={{marginBottom:14}}>
+              <div style={{fontSize:10,fontWeight:700,color:"var(--ts)",textTransform:"uppercase",letterSpacing:".07em",marginBottom:7}}>{cat.label}</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {cat.emojis.map(e=>(
+                  <button key={e} onClick={()=>setEmoji(e)}
+                    style={{width:38,height:38,borderRadius:10,background:emoji===e?color+"22":"var(--muted)",border:emoji===e?`2px solid ${color}`:"1.5px solid var(--b)",cursor:"pointer",fontSize:19,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .1s",flexShrink:0}}>
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div style={{height:4}}/>
+        </div>
+
+        {/* Pied de page */}
+        <div style={{padding:"12px 20px 28px",borderTop:"1px solid var(--b)",flexShrink:0,display:"flex",gap:10,background:"var(--card)"}}>
+          <button onClick={onClose} style={{flex:1,padding:12,background:"var(--muted)",color:"var(--tp)",border:"1px solid var(--bs)",borderRadius:11,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Annuler</button>
+          <button onClick={handleSave} style={{flex:2,padding:12,background:"var(--ac)",color:"#fff",border:"none",borderRadius:11,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            <Check size={16}/>{initial?"Enregistrer":"Créer la catégorie"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── SettingsScreen ───────────────────────────────────────────
 function SettingsScreen({darkMode,setDarkMode,customCats,setCustomCats,entries,onExport,onImport,notifications}){
   const toast=useToast();
   const importRef=useRef();
-  const[newCat,setNewCat]=useState({name:"",color:null,icon:ICON_OPTS[0]});
-  const[catErr,setCatErr]=useState(false);
   const[importMsg,setImportMsg]=useState(null);
   const[exporting,setExporting]=useState(false);
-  const[editingCat,setEditingCat]=useState(null); // {key, name, color, icon}
+  // modal: null | {mode:"create"} | {mode:"edit",key,cat}
+  const[catModal,setCatModal]=useState(null);
 
-  // Toutes les catégories (base + custom), sauf cachées
   const allMerged=useMemo(()=>{
     const m={...BASE_CATS,...customCats};
     return Object.entries(m).filter(([,c])=>!c.hidden);
   },[customCats]);
 
-  const addCat=()=>{
-    if(!newCat.name.trim()||newCat.color===null){setCatErr(true);return;}
-    setCatErr(false);
-    const k="c_"+Date.now();
-    setCustomCats(p=>({...p,[k]:{label:newCat.name.trim(),short:newCat.name.length>12?newCat.name.substring(0,12)+"…":newCat.name,...COLOR_OPTS[newCat.color],emoji:newCat.icon}}));
-    setNewCat({name:"",color:null,icon:ICON_OPTS[0]});
-    toast("Catégorie ajoutée !","success");
-  };
-
-  const startEdit=(key,cat)=>{
-    // Trouve l'index couleur correspondant
-    const ci=COLOR_OPTS.findIndex(c=>c.dot===cat.dot);
-    setEditingCat({key,name:cat.label,color:ci>=0?ci:0,icon:cat.emoji||ICON_OPTS[0]});
-  };
-
-  const saveEdit=()=>{
-    if(!editingCat||!editingCat.name.trim())return;
-    const{key,name,color,icon}=editingCat;
-    const base=BASE_CATS[key];
-    const updated={
-      ...(base||customCats[key]),
-      ...COLOR_OPTS[color],
-      label:name.trim(),
-      short:name.length>12?name.substring(0,12)+"…":name,
-      emoji:icon,
-      ...(base?{base:true}:{}),
-    };
-    setCustomCats(p=>({...p,[key]:updated}));
-    setEditingCat(null);
-    toast("Catégorie modifiée !","success");
+  const handleSaveCat=({name,short,dot,bg,color,emoji})=>{
+    if(catModal.mode==="create"){
+      const k="c_"+Date.now();
+      setCustomCats(p=>({...p,[k]:{label:name,short,dot,bg,color,emoji}}));
+      toast("Catégorie créée !","success");
+    }else{
+      const k=catModal.key;
+      const base=BASE_CATS[k];
+      setCustomCats(p=>({...p,[k]:{...(base||p[k]),label:name,short,dot,bg,color,emoji,...(base?{base:true}:{})}}));
+      toast("Catégorie modifiée !","success");
+    }
+    setCatModal(null);
   };
 
   const delCat=k=>{
-    const isBase=!!BASE_CATS[k];
     const label=(customCats[k]||BASE_CATS[k])?.label;
     if(!confirm(`Supprimer "${label}" ?`))return;
-    if(isBase){
-      // Marquer comme cachée dans customCats
-      setCustomCats(p=>({...p,[k]:{...BASE_CATS[k],...(p[k]||{}),hidden:true}}));
-    }else{
-      setCustomCats(p=>{const n={...p};delete n[k];return n;});
-    }
+    if(BASE_CATS[k]){setCustomCats(p=>({...p,[k]:{...BASE_CATS[k],...(p[k]||{}),hidden:true}}));}
+    else{setCustomCats(p=>{const n={...p};delete n[k];return n;});}
     toast("Catégorie supprimée","info");
   };
-
-  const SL={fontSize:11,color:"var(--ts)",marginBottom:5,display:"block",fontWeight:600,letterSpacing:".05em",textTransform:"uppercase"};
-  const SI={width:"100%",padding:"10px 12px",fontSize:14,border:"1px solid var(--bs)",borderRadius:10,background:"var(--input)",color:"var(--tp)",outline:"none",fontFamily:"inherit"};
 
   return(
     <div className="fu">
@@ -812,6 +912,7 @@ function SettingsScreen({darkMode,setDarkMode,customCats,setCustomCats,entries,o
         <p style={{fontSize:13,color:"var(--ts)",marginTop:2}}>v{APP_VERSION}</p>
       </div>
 
+      {/* Affichage */}
       <div style={{fontSize:11,fontWeight:600,color:"var(--ts)",padding:"14px 20px 8px",letterSpacing:".07em",textTransform:"uppercase"}}>Affichage</div>
       <div style={{margin:"0 16px 20px",background:"var(--card)",border:"1px solid var(--b)",borderRadius:14,overflow:"hidden"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px"}}>
@@ -820,30 +921,24 @@ function SettingsScreen({darkMode,setDarkMode,customCats,setCustomCats,entries,o
         </div>
       </div>
 
+      {/* Notifications */}
       <div style={{fontSize:11,fontWeight:600,color:"var(--ts)",padding:"0 20px 8px",letterSpacing:".07em",textTransform:"uppercase"}}>Notifications</div>
       <div style={{margin:"0 16px 20px",background:"var(--card)",border:"1px solid var(--b)",borderRadius:14,overflow:"hidden"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px"}}>
           <div>
             <div style={{fontSize:14,fontWeight:500,color:"var(--tp)"}}>Rappels de RDV</div>
             <div style={{fontSize:12,color:"var(--ts)",marginTop:2}}>
-              {notifications.perm!=="granted"
-                ?"Permission non accordée"
-                :notifications.enabled
-                  ?"Actifs · 3 jours avant le RDV"
-                  :"Désactivés"
-              }
+              {notifications.perm!=="granted"?"Permission non accordée":notifications.enabled?"Actifs · 3 jours avant le RDV":"Désactivés"}
             </div>
           </div>
           {notifications.perm==="granted"
-            ? <Toggle checked={notifications.enabled} onChange={notifications.toggle}/>
-            : <button onClick={notifications.request}
-                style={{padding:"7px 14px",background:"var(--ac)",color:"#fff",border:"none",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-                Activer
-              </button>
+            ?<Toggle checked={notifications.enabled} onChange={notifications.toggle}/>
+            :<button onClick={notifications.request} style={{padding:"7px 14px",background:"var(--ac)",color:"#fff",border:"none",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Activer</button>
           }
         </div>
       </div>
 
+      {/* Données */}
       <div style={{fontSize:11,fontWeight:600,color:"var(--ts)",padding:"0 20px 8px",letterSpacing:".07em",textTransform:"uppercase"}}>Données</div>
       <div style={{margin:"0 16px 20px",background:"var(--card)",border:"1px solid var(--b)",borderRadius:14,overflow:"hidden"}}>
         <div style={{padding:"14px 16px",borderBottom:"1px solid var(--b)"}}>
@@ -870,71 +965,54 @@ function SettingsScreen({darkMode,setDarkMode,customCats,setCustomCats,entries,o
         </div>
       </div>
 
-      {/* ── Gestion des catégories ── */}
-      <div style={{fontSize:11,fontWeight:600,color:"var(--ts)",padding:"0 20px 8px",letterSpacing:".07em",textTransform:"uppercase"}}>Catégories</div>
-      <div style={{padding:"0 16px",display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+      {/* Catégories */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 20px 8px"}}>
+        <div style={{fontSize:11,fontWeight:600,color:"var(--ts)",letterSpacing:".07em",textTransform:"uppercase"}}>Catégories</div>
+        <button onClick={()=>setCatModal({mode:"create"})}
+          style={{display:"flex",alignItems:"center",gap:5,padding:"5px 13px",background:"var(--ac)",color:"#fff",border:"none",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+          <Plus size={13}/>Nouvelle
+        </button>
+      </div>
+      <div style={{padding:"0 16px",display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
         {allMerged.map(([k,c])=>{
-          const isEditing=editingCat?.key===k;
-          const entryCount=entries.filter(e=>e.cat===k).length;
+          const cnt=entries.filter(e=>e.cat===k).length;
           return(
-            <div key={k} style={{background:"var(--card)",border:"1px solid var(--b)",borderRadius:14,overflow:"hidden"}}>
-              {/* Ligne de résumé */}
-              <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px"}}>
-                <div style={{width:32,height:32,borderRadius:8,background:c.dot+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>
-                  {c.emoji?c.emoji:<CatIcon cat={c} size={16}/>}
-                </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"var(--tp)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.label}</div>
-                  <div style={{fontSize:11,color:"var(--ts)",marginTop:1}}>{entryCount} entrée{entryCount!==1?"s":""}{BASE_CATS[k]?" · par défaut":""}</div>
-                </div>
-                <button onClick={()=>isEditing?setEditingCat(null):startEdit(k,c)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--ac)",padding:"4px 6px",lineHeight:1,display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:600,fontFamily:"inherit"}}>
-                  <Edit2 size={14}/>{isEditing?"Fermer":""}
-                </button>
-                <button onClick={()=>delCat(k)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--er)",padding:"4px 4px",lineHeight:1}}>
-                  <X size={16}/>
-                </button>
+            <div key={k} style={{display:"flex",alignItems:"center",gap:10,background:"var(--card)",border:"1px solid var(--b)",borderRadius:13,padding:"10px 12px"}}>
+              <div style={{width:36,height:36,borderRadius:9,background:c.dot+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18}}>
+                {c.emoji?c.emoji:<CatIcon cat={c} size={17}/>}
               </div>
-              {/* Formulaire d'édition inline */}
-              {isEditing&&(
-                <div style={{borderTop:"1px solid var(--b)",padding:"12px 12px 14px",background:"var(--muted)"}}>
-                  <input value={editingCat.name} onChange={e=>setEditingCat(p=>({...p,name:e.target.value}))} placeholder="Nom…" maxLength={24} style={{...SI,marginBottom:10}}/>
-                  <label style={SL}>Couleur</label>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:10}}>
-                    {COLOR_OPTS.map((co,i)=>(<div key={i} onClick={()=>setEditingCat(p=>({...p,color:i}))} style={{width:28,height:28,borderRadius:"50%",background:co.dot,cursor:"pointer",border:editingCat.color===i?"2.5px solid var(--tp)":"2.5px solid transparent",transform:editingCat.color===i?"scale(1.18)":"none",transition:"transform .1s"}}/>))}
-                  </div>
-                  <label style={SL}>Icône (emoji)</label>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
-                    {ICON_OPTS.map(ic=>(<button key={ic} onClick={()=>setEditingCat(p=>({...p,icon:ic}))} style={{width:34,height:34,borderRadius:8,background:"var(--card)",border:editingCat.icon===ic?"1.5px solid var(--ac)":"1px solid var(--b)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{ic}</button>))}
-                  </div>
-                  <button onClick={saveEdit} style={{width:"100%",padding:"10px",background:"var(--ac)",color:"#fff",border:"none",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-                    <Check size={14} style={{verticalAlign:"middle",marginRight:5}}/>Enregistrer
-                  </button>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600,color:"var(--tp)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.label}</div>
+                <div style={{fontSize:11,color:"var(--ts)",marginTop:1,display:"flex",alignItems:"center",gap:5}}>
+                  <div style={{width:8,height:8,borderRadius:"50%",background:c.dot,flexShrink:0}}/>
+                  {cnt} entrée{cnt!==1?"s":""}{BASE_CATS[k]?" · par défaut":""}
                 </div>
-              )}
+              </div>
+              <button onClick={()=>setCatModal({mode:"edit",key:k,cat:c})}
+                style={{background:"var(--muted)",border:"1px solid var(--b)",cursor:"pointer",color:"var(--ac)",borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Edit2 size={14}/>
+              </button>
+              <button onClick={()=>delCat(k)}
+                style={{background:"var(--er-bg)",border:"1px solid var(--er)",cursor:"pointer",color:"var(--er)",borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <X size={14}/>
+              </button>
             </div>
           );
         })}
       </div>
-
-      {/* Nouvelle catégorie */}
-      <div style={{margin:"0 16px 16px",background:"var(--card)",border:"1px solid var(--b)",borderRadius:14,padding:16}}>
-        <div style={{fontSize:13,fontWeight:600,color:"var(--tp)",marginBottom:14,textTransform:"uppercase",letterSpacing:".05em"}}>Nouvelle catégorie</div>
-        <input value={newCat.name} onChange={e=>setNewCat(p=>({...p,name:e.target.value}))} placeholder="Nom de la catégorie…" maxLength={24} style={{...SI,marginBottom:14}}/>
-        <label style={SL}>Couleur</label>
-        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:14}}>
-          {COLOR_OPTS.map((c,i)=>(<div key={i} onClick={()=>setNewCat(p=>({...p,color:i}))} style={{width:30,height:30,borderRadius:"50%",background:c.dot,cursor:"pointer",border:newCat.color===i?"2.5px solid var(--tp)":"2.5px solid transparent",transform:newCat.color===i?"scale(1.18)":"none",transition:"transform .1s"}}/>))}
-        </div>
-        <label style={SL}>Icône (emoji)</label>
-        <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:14}}>
-          {ICON_OPTS.map(ic=>(<button key={ic} onClick={()=>setNewCat(p=>({...p,icon:ic}))} style={{width:36,height:36,borderRadius:9,background:"var(--muted)",border:newCat.icon===ic?"1px solid var(--ac)":"1px solid var(--b)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17}}>{ic}</button>))}
-        </div>
-        {catErr&&<div style={{fontSize:12,color:"var(--er)",marginBottom:10}}>Veuillez saisir un nom et choisir une couleur.</div>}
-        <button onClick={addCat} style={{width:"100%",padding:11,background:"var(--ac)",color:"#fff",border:"none",borderRadius:10,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Ajouter la catégorie</button>
-      </div>
       <div style={{height:8}}/>
+
+      {catModal&&(
+        <CategoryModal
+          initial={catModal.mode==="edit"?{name:catModal.cat.label,dot:catModal.cat.dot,emoji:catModal.cat.emoji||"📋"}:null}
+          onSave={handleSaveCat}
+          onClose={()=>setCatModal(null)}
+        />
+      )}
     </div>
   );
 }
+
 
 // ─── App (racine) ─────────────────────────────────────────────
 function App(){
