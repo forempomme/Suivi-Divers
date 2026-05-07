@@ -41,14 +41,15 @@ const CSS = `
   --warn:#8B6914;--warn-bg:#F4EDD8;
 }
 [data-dark]{
-  --bg:#080B12;--card:#0F1520;--input:#0F1520;--muted:#141D2E;--nav:#0B0E18;
-  --tp:#C8C0E8;--ts:#3A5870;--th:#1E2A3A;
-  --b:rgba(184,168,80,.13);--bs:rgba(184,168,80,.28);
+  --bg:#080B12;--card:#0F1520;--input:#0F1520;--muted:#141D2E;--nav:#0D1628;
+  --tp:#C8C0E8;--ts:#6A8AA8;--th:#4A6880;
+  --b:rgba(184,168,80,.18);--bs:rgba(184,168,80,.32);
   --ac:#C8A84B;--al:#1A2214;
   --ok-bg:#0A1A10;--ok-b:#1E4024;--ok-t:#6AB87A;--ok-m:#3A7C5C;
   --nx-bg:#1A2214;--nx-t:#C8A84B;
   --er:#CC5A44;--er-bg:#1A0E0A;
   --warn:#C8A84B;--warn-bg:#1A1A08;
+  --nav-border:rgba(200,168,75,.28);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);transition:background .25s}
@@ -593,8 +594,10 @@ function FormStepper({allCats,editingEntry,editingDocs,onSave,onCancelEdit}){
 }
 
 // ─── HomeScreen ───────────────────────────────────────────────
-function HomeScreen({entries,docs,allCats,onFilterHistory,upcomingCount}){
+function HomeScreen({entries,docs,allCats,onFilterHistory,upcomingCount,darkMode}){
   const recent=[...entries].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  const catBg=(c)=>darkMode?c.dot+"1A":c.bg;
+  const catBadgeBg=(c)=>darkMode?c.dot+"2A":c.bg;
   return(
     <div className="fu">
       <div style={{padding:"16px 20px 12px",background:"var(--card)",borderBottom:"1px solid var(--b)",position:"sticky",top:0,zIndex:10}}>
@@ -611,10 +614,10 @@ function HomeScreen({entries,docs,allCats,onFilterHistory,upcomingCount}){
           const last=entries.filter(e=>e.cat===k).sort((a,b)=>b.date.localeCompare(a.date))[0];
           return(
             <div key={k} onClick={()=>onFilterHistory(k)} style={{background:"var(--card)",border:"1px solid var(--b)",borderRadius:14,padding:14,cursor:"pointer"}}>
-              <div style={{width:34,height:34,borderRadius:9,background:c.bg,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:9}}><CatIcon cat={c} size={17}/></div>
+              <div style={{width:34,height:34,borderRadius:9,background:catBg(c),display:"flex",alignItems:"center",justifyContent:"center",marginBottom:9}}><CatIcon cat={c} size={17}/></div>
               <div style={{fontSize:13,fontWeight:600,color:"var(--tp)"}}>{c.label}</div>
               <div style={{fontSize:11,color:"var(--ts)",marginTop:2}}>{last?"Dernier : "+fmt(last.date):"Aucun suivi"}</div>
-              <span style={{display:"inline-block",fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,marginTop:6,background:c.bg,color:c.color}}>{cnt} entrée{cnt!==1?"s":""}</span>
+              <span style={{display:"inline-block",fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,marginTop:6,background:catBadgeBg(c),color:darkMode?c.dot:c.color}}>{cnt} entrée{cnt!==1?"s":""}</span>
             </div>
           );
         })}
@@ -746,6 +749,13 @@ function SettingsScreen({darkMode,setDarkMode,customCats,setCustomCats,entries,o
   const[catErr,setCatErr]=useState(false);
   const[importMsg,setImportMsg]=useState(null);
   const[exporting,setExporting]=useState(false);
+  const[editingCat,setEditingCat]=useState(null); // {key, name, color, icon}
+
+  // Toutes les catégories (base + custom), sauf cachées
+  const allMerged=useMemo(()=>{
+    const m={...BASE_CATS,...customCats};
+    return Object.entries(m).filter(([,c])=>!c.hidden);
+  },[customCats]);
 
   const addCat=()=>{
     if(!newCat.name.trim()||newCat.color===null){setCatErr(true);return;}
@@ -755,7 +765,43 @@ function SettingsScreen({darkMode,setDarkMode,customCats,setCustomCats,entries,o
     setNewCat({name:"",color:null,icon:ICON_OPTS[0]});
     toast("Catégorie ajoutée !","success");
   };
-  const delCat=k=>{if(!confirm(`Supprimer "${customCats[k]?.label}" ?`))return;setCustomCats(p=>{const n={...p};delete n[k];return n;});toast("Catégorie supprimée","info");};
+
+  const startEdit=(key,cat)=>{
+    // Trouve l'index couleur correspondant
+    const ci=COLOR_OPTS.findIndex(c=>c.dot===cat.dot);
+    setEditingCat({key,name:cat.label,color:ci>=0?ci:0,icon:cat.emoji||ICON_OPTS[0]});
+  };
+
+  const saveEdit=()=>{
+    if(!editingCat||!editingCat.name.trim())return;
+    const{key,name,color,icon}=editingCat;
+    const base=BASE_CATS[key];
+    const updated={
+      ...(base||customCats[key]),
+      ...COLOR_OPTS[color],
+      label:name.trim(),
+      short:name.length>12?name.substring(0,12)+"…":name,
+      emoji:icon,
+      ...(base?{base:true}:{}),
+    };
+    setCustomCats(p=>({...p,[key]:updated}));
+    setEditingCat(null);
+    toast("Catégorie modifiée !","success");
+  };
+
+  const delCat=k=>{
+    const isBase=!!BASE_CATS[k];
+    const label=(customCats[k]||BASE_CATS[k])?.label;
+    if(!confirm(`Supprimer "${label}" ?`))return;
+    if(isBase){
+      // Marquer comme cachée dans customCats
+      setCustomCats(p=>({...p,[k]:{...BASE_CATS[k],...(p[k]||{}),hidden:true}}));
+    }else{
+      setCustomCats(p=>{const n={...p};delete n[k];return n;});
+    }
+    toast("Catégorie supprimée","info");
+  };
+
   const SL={fontSize:11,color:"var(--ts)",marginBottom:5,display:"block",fontWeight:600,letterSpacing:".05em",textTransform:"uppercase"};
   const SI={width:"100%",padding:"10px 12px",fontSize:14,border:"1px solid var(--bs)",borderRadius:10,background:"var(--input)",color:"var(--tp)",outline:"none",fontFamily:"inherit"};
 
@@ -824,18 +870,53 @@ function SettingsScreen({darkMode,setDarkMode,customCats,setCustomCats,entries,o
         </div>
       </div>
 
-      <div style={{fontSize:11,fontWeight:600,color:"var(--ts)",padding:"0 20px 8px",letterSpacing:".07em",textTransform:"uppercase"}}>Catégories personnalisées</div>
-      <div style={{padding:"0 16px",display:"flex",flexDirection:"column",gap:8,marginBottom:8}}>
-        {Object.entries(customCats).length?Object.entries(customCats).map(([k,c])=>(
-          <div key={k} style={{display:"flex",alignItems:"center",gap:10,background:"var(--card)",border:"1px solid var(--b)",borderRadius:12,padding:"10px 12px"}}>
-            <div style={{width:10,height:10,borderRadius:"50%",background:c.dot,flexShrink:0}}/>
-            <span style={{fontSize:18}}>{c.emoji}</span>
-            <div style={{flex:1,fontSize:14,color:"var(--tp)",fontWeight:500}}>{c.label}</div>
-            <div style={{fontSize:12,color:"var(--ts)"}}>{entries.filter(e=>e.cat===k).length}</div>
-            <button onClick={()=>delCat(k)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--th)",lineHeight:1,padding:"0 2px"}}><X size={16}/></button>
-          </div>
-        )):<div style={{fontSize:13,color:"var(--ts)",paddingLeft:4}}>Aucune catégorie personnalisée.</div>}
+      {/* ── Gestion des catégories ── */}
+      <div style={{fontSize:11,fontWeight:600,color:"var(--ts)",padding:"0 20px 8px",letterSpacing:".07em",textTransform:"uppercase"}}>Catégories</div>
+      <div style={{padding:"0 16px",display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+        {allMerged.map(([k,c])=>{
+          const isEditing=editingCat?.key===k;
+          const entryCount=entries.filter(e=>e.cat===k).length;
+          return(
+            <div key={k} style={{background:"var(--card)",border:"1px solid var(--b)",borderRadius:14,overflow:"hidden"}}>
+              {/* Ligne de résumé */}
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px"}}>
+                <div style={{width:32,height:32,borderRadius:8,background:c.dot+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>
+                  {c.emoji?c.emoji:<CatIcon cat={c} size={16}/>}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600,color:"var(--tp)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.label}</div>
+                  <div style={{fontSize:11,color:"var(--ts)",marginTop:1}}>{entryCount} entrée{entryCount!==1?"s":""}{BASE_CATS[k]?" · par défaut":""}</div>
+                </div>
+                <button onClick={()=>isEditing?setEditingCat(null):startEdit(k,c)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--ac)",padding:"4px 6px",lineHeight:1,display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:600,fontFamily:"inherit"}}>
+                  <Edit2 size={14}/>{isEditing?"Fermer":""}
+                </button>
+                <button onClick={()=>delCat(k)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--er)",padding:"4px 4px",lineHeight:1}}>
+                  <X size={16}/>
+                </button>
+              </div>
+              {/* Formulaire d'édition inline */}
+              {isEditing&&(
+                <div style={{borderTop:"1px solid var(--b)",padding:"12px 12px 14px",background:"var(--muted)"}}>
+                  <input value={editingCat.name} onChange={e=>setEditingCat(p=>({...p,name:e.target.value}))} placeholder="Nom…" maxLength={24} style={{...SI,marginBottom:10}}/>
+                  <label style={SL}>Couleur</label>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:10}}>
+                    {COLOR_OPTS.map((co,i)=>(<div key={i} onClick={()=>setEditingCat(p=>({...p,color:i}))} style={{width:28,height:28,borderRadius:"50%",background:co.dot,cursor:"pointer",border:editingCat.color===i?"2.5px solid var(--tp)":"2.5px solid transparent",transform:editingCat.color===i?"scale(1.18)":"none",transition:"transform .1s"}}/>))}
+                  </div>
+                  <label style={SL}>Icône (emoji)</label>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
+                    {ICON_OPTS.map(ic=>(<button key={ic} onClick={()=>setEditingCat(p=>({...p,icon:ic}))} style={{width:34,height:34,borderRadius:8,background:"var(--card)",border:editingCat.icon===ic?"1.5px solid var(--ac)":"1px solid var(--b)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{ic}</button>))}
+                  </div>
+                  <button onClick={saveEdit} style={{width:"100%",padding:"10px",background:"var(--ac)",color:"#fff",border:"none",borderRadius:10,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                    <Check size={14} style={{verticalAlign:"middle",marginRight:5}}/>Enregistrer
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      {/* Nouvelle catégorie */}
       <div style={{margin:"0 16px 16px",background:"var(--card)",border:"1px solid var(--b)",borderRadius:14,padding:16}}>
         <div style={{fontSize:13,fontWeight:600,color:"var(--tp)",marginBottom:14,textTransform:"uppercase",letterSpacing:".05em"}}>Nouvelle catégorie</div>
         <input value={newCat.name} onChange={e=>setNewCat(p=>({...p,name:e.target.value}))} placeholder="Nom de la catégorie…" maxLength={24} style={{...SI,marginBottom:14}}/>
@@ -843,7 +924,7 @@ function SettingsScreen({darkMode,setDarkMode,customCats,setCustomCats,entries,o
         <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:14}}>
           {COLOR_OPTS.map((c,i)=>(<div key={i} onClick={()=>setNewCat(p=>({...p,color:i}))} style={{width:30,height:30,borderRadius:"50%",background:c.dot,cursor:"pointer",border:newCat.color===i?"2.5px solid var(--tp)":"2.5px solid transparent",transform:newCat.color===i?"scale(1.18)":"none",transition:"transform .1s"}}/>))}
         </div>
-        <label style={SL}>Icône</label>
+        <label style={SL}>Icône (emoji)</label>
         <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:14}}>
           {ICON_OPTS.map(ic=>(<button key={ic} onClick={()=>setNewCat(p=>({...p,icon:ic}))} style={{width:36,height:36,borderRadius:9,background:"var(--muted)",border:newCat.icon===ic?"1px solid var(--ac)":"1px solid var(--b)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17}}>{ic}</button>))}
         </div>
@@ -859,7 +940,7 @@ function SettingsScreen({darkMode,setDarkMode,customCats,setCustomCats,entries,o
 function App(){
   const[entries,setEntries]       =useStorage("tr-entries",[]);
   const[customCats,setCustomCats] =useStorage("tr-custom-cats",{});
-  const[darkMode,setDarkMode]     =useStorage("tr-dark",false);
+  const[darkMode,setDarkMode]     =useStorage("tr-dark",true);
   const[docs,setDocs]             =useState({});
 
   // Navigation avec historique pour le bouton retour Android
@@ -870,7 +951,7 @@ function App(){
   const[modalEntry,setModalEntry] =useState(null);
   const[editingId,setEditingId]   =useState(null);
 
-  const allCats     =useMemo(()=>({...BASE_CATS,...customCats}),[customCats]);
+  const allCats=useMemo(()=>{const m={...BASE_CATS,...customCats};return Object.fromEntries(Object.entries(m).filter(([,c])=>!c.hidden));},[customCats]);
   const editingEntry=useMemo(()=>editingId!=null?entries.find(e=>e.id===editingId):null,[editingId,entries]);
   const editingDocs =useMemo(()=>editingId!=null?(docs[editingId]||[]):[],[editingId,docs]);
 
@@ -1004,7 +1085,7 @@ function App(){
           <div style={{flex:1,overflowY:"auto",paddingBottom:72}}>
 
             {screen==="home"&&
-              <HomeScreen entries={entries} docs={docs} allCats={allCats} upcomingCount={upcomingCount}
+              <HomeScreen entries={entries} docs={docs} allCats={allCats} upcomingCount={upcomingCount} darkMode={darkMode}
                 onFilterHistory={cat=>{setHistFilter(cat);navigate("history");}}/>}
 
             {screen==="history"&&
@@ -1029,13 +1110,20 @@ function App(){
                 entries={entries} onExport={handleExport} onImport={handleImport} notifications={notifications}/>}
           </div>
 
-          <nav style={{position:"absolute",bottom:0,left:0,right:0,background:"var(--nav)",borderTop:"1px solid var(--b)",display:"flex",padding:"6px 0 10px",zIndex:20,transition:"background .25s"}}>
+          <nav style={{position:"absolute",bottom:0,left:0,right:0,background:"var(--nav)",borderTop:"2px solid var(--nav-border, var(--b))",display:"flex",padding:"6px 0 10px",zIndex:20,transition:"background .25s"}}>
             <NavBtn id="home"     label="Accueil"    icon={Home}     badge={upcomingCount}/>
             <NavBtn id="history"  label="Historique" icon={BookOpen}/>
-            <NavBtn id="add"      label="Ajouter"    icon={Plus}/>
             <NavBtn id="rapport"  label="Rapport"    icon={BarChart2}/>
             <NavBtn id="settings" label="Réglages"   icon={Settings}/>
           </nav>
+          {/* FAB flottant */}
+          <button onClick={()=>navigate("add")} style={{position:"absolute",bottom:62,right:18,width:52,height:52,borderRadius:"50%",background:"var(--ac)",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 18px rgba(0,0,0,.38)",zIndex:25,transition:"transform .15s,box-shadow .15s"}}
+            onMouseDown={e=>e.currentTarget.style.transform="scale(.92)"}
+            onMouseUp={e=>e.currentTarget.style.transform="scale(1)"}
+            onTouchStart={e=>e.currentTarget.style.transform="scale(.92)"}
+            onTouchEnd={e=>e.currentTarget.style.transform="scale(1)"}>
+            <Plus size={26} color="#fff" strokeWidth={2.5}/>
+          </button>
         </div>
       </div>
 
