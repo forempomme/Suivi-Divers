@@ -1,4 +1,4 @@
-# Suivi Divers — v2.0.0
+# Suivi Divers — v2.0.1
 
 Application Android de suivi personnel (voiture, vétérinaire, médecin, maison…).
 Design Material You (style natif Android). Mode sombre par défaut.
@@ -44,7 +44,7 @@ Créez ces 4 secrets :
 2. **Run workflow** → **Run workflow**
 3. Attendez ~5-10 min (plus long au premier build)
 4. Une fois terminé, cliquez sur le run → section **Artifacts**
-5. Téléchargez `SuiviDivers-v2.0.0`
+5. Téléchargez `SuiviDivers-v2.0.1`
 6. Installez l'APK sur votre téléphone
 
 ### Mises à jour futures
@@ -68,7 +68,7 @@ suivi-divers/
 ├── public/
 │   └── icon.png               ← Icône de l'application
 ├── index.html
-├── package.json               ← Dépendances (version 2.0.0)
+├── package.json               ← Dépendances (version 2.0.1)
 ├── vite.config.js
 └── capacitor.config.json
 ```
@@ -90,6 +90,11 @@ Convention :
 
 ## Historique des versions
 
+### v2.0.1 — Correction de compilation
+**Fichiers modifiés : `package.json`, `src/App.jsx` (numéro de version)**
+- La compilation échouait (`Could not resolve entry module "recharts"`) : `recharts` avait été retiré de `package.json` alors que `vite.config.js` le cite encore. Remis en place.
+- **Compilation GitHub** : dans `.github/workflows/build.yml`, l'étape `android-actions/setup-android@v3` doit avoir `with: packages: 'platform-tools'` (Google a supprimé l'ancien paquet `tools` installé par défaut en v3).
+
 ### v2.0.0 — Refonte graphique Material You
 **Fichiers modifiés : `src/App.jsx`, `src/main.jsx`, `package.json`, `capacitor.config.json`**
 
@@ -104,7 +109,7 @@ Version majeure : toute l'interface change d'apparence (les données et fonction
 - **Rapport** : sélecteur de période segmenté, total en grand, comparaison avec l'année précédente, barres mensuelles (appuyer sur une barre affiche le détail du mois), répartition par catégorie en pourcentage.
 - **Messages** : bulles remplacées par des « snackbars » Android en bas d'écran.
 - **Accessibilité** : vrais boutons partout, libellés pour les lecteurs d'écran, contrastes vérifiés.
-- **Technique** : la bibliothèque de graphiques `recharts` est supprimée (graphique refait en simple HTML, application plus légère). Barre d'état et écran de démarrage aux couleurs du nouveau thème.
+- **Technique** : le graphique du rapport n'utilise plus la bibliothèque `recharts` (refait en simple HTML). Barre d'état et écran de démarrage aux couleurs du nouveau thème.
 
 ### v1.4.0 — Nouvelles fonctionnalités
 **Fichiers modifiés : `src/App.jsx`, `src/main.jsx`, `package.json`, `capacitor.config.json`**
