@@ -3,9 +3,9 @@
   "appName": "Suivi Divers",
   "webDir": "dist",
   "server": { "androidScheme": "https" },
-  "android": { "backgroundColor": "#F2EDE4" },
+  "android": { "backgroundColor": "#111418" },
   "plugins": {
-    "LocalNotifications": { "smallIcon": "ic_stat_notify", "iconColor": "#C8A84B" },
-    "SplashScreen": { "launchShowDuration": 600, "backgroundColor": "#F2EDE4", "showSpinner": false }
+    "LocalNotifications": { "smallIcon": "ic_stat_notify", "iconColor": "#3E5F90" },
+    "SplashScreen": { "launchShowDuration": 600, "backgroundColor": "#111418", "showSpinner": false }
   }
 }
