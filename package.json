@@ -1,6 +1,6 @@
 {
   "name": "suivi-divers",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -20,7 +20,8 @@
     "lodash": "^4.17.21",
     "lucide-react": "^0.383.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.0.0",
