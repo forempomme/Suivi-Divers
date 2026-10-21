@@ -3,7 +3,7 @@ import { Home, BookOpen, Plus, BarChart2, Settings, Edit2, Trash2, FileText, Cam
 import _ from "lodash";
 
 // ─── Constantes ───────────────────────────────────────────────
-const APP_VERSION = "2.0.0"; // Majeure : refonte graphique Material You (piste C)
+const APP_VERSION = "2.0.1"; // Patch : compilation réparée (recharts encore attendu par vite.config.js)
 const APP_NAME    = "Suivi Divers";
 
 const COLOR_OPTS = [
